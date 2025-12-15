@@ -1,35 +1,66 @@
+/* Basic layout */
 body {
   margin: 0;
-  font-family: Arial, sans-serif;
   background: #111;
   color: white;
+  font-family: Arial, sans-serif;
 }
 
-button {
-  margin-bottom: 20px;
-  padding: 10px 16px;
-  cursor: pointer;
+.container {
+  padding: 20px;
 }
 
+/* Parking grid */
 .grid {
   display: grid;
   grid-template-columns: repeat(10, 1fr);
   gap: 10px;
+  margin-top: 20px;
 }
 
+/* Common slot style */
 .slot {
   height: 60px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  border-radius: 6px;
 }
 
+/* DATA = occupied:false */
 .empty {
-  background: #2ecc71;
+  background: #2ecc71; /* green */
 }
 
+/* DATA = occupied:true */
 .occupied {
-  background: #e74c3c;
+  background: #e74c3c; /* red */
+}
+
+/* MODAL BACKGROUND */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* MODAL BOX */
+.modal {
+  background: #222;
+  padding: 20px;
+  width: 300px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Buttons row */
+.actions {
+  display: flex;
+  justify-content: space-between;
 }
