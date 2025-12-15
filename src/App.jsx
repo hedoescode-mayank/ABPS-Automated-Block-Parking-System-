@@ -10,7 +10,7 @@ export default function App() {
       vehicle: null,
     }))
   );
-
+//park car 
   function parkCar() {
     const index = slots.findIndex(s => !s.occupied);
     if (index === -1) {
@@ -39,7 +39,7 @@ export default function App() {
         : s
     );
     setSlots(newSlots);
-    
+
   }
 
   return (
