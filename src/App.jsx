@@ -3,7 +3,6 @@ import {
   Car, 
   Search, 
   Plus, 
-  Trash2, 
   CheckCircle2, 
   Clock, 
   CircleDollarSign, 
@@ -14,12 +13,17 @@ import {
   MessageCircle,
   CreditCard,
   QrCode,
-  Download,
-  Share2
+  ShieldCheck,
+  Smartphone,
+  Maximize,
+  User,
+  Settings,
+  AlertTriangle
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { QRCodeSVG } from "qrcode.react";
 import confetti from "canvas-confetti";
+import QRScanner from "./components/QRScanner";
 import "./App.css";
 
 const TICKET_TYPES = [
@@ -29,7 +33,7 @@ const TICKET_TYPES = [
 ];
 
 export default function App() {
-  // 1. Initial State
+  // 1. Core State
   const [slots, setSlots] = useState(() => {
     const saved = localStorage.getItem("abps_slots");
     if (saved) return JSON.parse(saved);
@@ -39,7 +43,8 @@ export default function App() {
       vehicle: null,
       entryTime: null,
       expiryTime: null,
-      ticketType: null
+      ticketType: null,
+      ticketId: null
     }));
   });
 
@@ -48,7 +53,11 @@ export default function App() {
     return saved ? JSON.parse(saved) : [];
   });
 
+  // UI State
+  const [isAttendantMode, setIsAttendantMode] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
+  const [verificationResult, setVerificationResult] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [activeTicket, setActiveTicket] = useState(null);
@@ -65,16 +74,13 @@ export default function App() {
     duration: "4h"
   });
 
-  // 2. Persistence
+  // Persistence
   useEffect(() => {
     localStorage.setItem("abps_slots", JSON.stringify(slots));
-  }, [slots]);
-
-  useEffect(() => {
     localStorage.setItem("abps_history", JSON.stringify(history));
-  }, [history]);
+  }, [slots, history]);
 
-  // 3. Stats & Filters
+  // Stats
   const stats = useMemo(() => {
     const occupied = slots.filter(s => s.occupied).length;
     const revenue = history.reduce((acc, curr) => acc + (curr.cost || 0), 0);
@@ -83,225 +89,255 @@ export default function App() {
 
   const filteredSlots = useMemo(() => {
     if (!searchQuery) return slots;
+    const query = searchQuery.toLowerCase();
     return slots.filter(s => 
-      s.vehicle?.vehicle.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.vehicle?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.slotNo.toString() === searchQuery
+      s.vehicle?.vehicle.toLowerCase().includes(query) ||
+      s.vehicle?.name.toLowerCase().includes(query) ||
+      s.vehicle?.phone.includes(query) ||
+      s.ticketId?.toLowerCase().includes(query) ||
+      s.slotNo.toString() === query
     );
   }, [slots, searchQuery]);
 
-  // 4. Handlers
+  // Handlers
   const handlePayment = async () => {
-    if (!form.name || !form.vehicle || !form.email || !form.whatsapp) {
-      alert("Please fill all contact details");
+    if (!form.name || !form.vehicle || !form.phone) {
+      alert("Please fill required details");
       return;
     }
 
     setIsProcessing(true);
-    // Simulate Payment Gateway Delay
-    await new Promise(r => setTimeout(r, 2000));
+    await new Promise(r => setTimeout(r, 1500));
     setIsProcessing(false);
     setPaymentSuccess(true);
-    confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+    confetti({ particleCount: 100, spread: 50 });
 
-    // Allocate Slot
     const emptySlot = slots.find(s => !s.occupied);
     const ticketInfo = TICKET_TYPES.find(t => t.id === form.duration);
     const entry = new Date();
     const expiry = new Date(entry.getTime() + ticketInfo.duration * 60 * 60 * 1000);
+    const ticketId = `ABPS-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
 
     const ticketData = {
       ...form,
       price: ticketInfo.price,
       duration: ticketInfo.label,
-      ticketId: `TXN-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
+      ticketId,
       entryTime: entry.toISOString(),
       expiryTime: expiry.toISOString(),
       slotNo: emptySlot.slotNo
     };
 
-    const newSlots = slots.map(s => 
+    setSlots(slots.map(s => 
       s.slotNo === emptySlot.slotNo 
-        ? { ...s, occupied: true, vehicle: { ...form }, entryTime: entry.toISOString(), expiryTime: expiry.toISOString(), ticketType: form.duration }
+        ? { ...s, occupied: true, vehicle: { ...form }, entryTime: entry.toISOString(), expiryTime: expiry.toISOString(), ticketType: form.duration, ticketId }
         : s
+    ));
+    setActiveTicket(ticketData);
+  };
+
+  const verifyTicket = (idOrPhone) => {
+    const query = idOrPhone.toLowerCase();
+    const slot = slots.find(s => 
+      s.ticketId?.toLowerCase() === query || 
+      s.vehicle?.phone === query ||
+      s.vehicle?.whatsapp === query
     );
 
-    setSlots(newSlots);
-    setActiveTicket(ticketData);
-    
-    // Simulate Notifications
-    console.log(`Email sent to ${form.email}`);
-    console.log(`WhatsApp sent to ${form.whatsapp}`);
+    if (slot) {
+      const now = new Date();
+      const expiry = new Date(slot.expiryTime);
+      const isValid = now < expiry;
+      setVerificationResult({ ...slot, isValid });
+    } else {
+      setVerificationResult({ error: "Ticket Not Found" });
+    }
+    setShowScanner(false);
   };
 
   const handleExit = (slotNo) => {
     const slot = slots.find(s => s.slotNo === slotNo);
     const ticketInfo = TICKET_TYPES.find(t => t.id === slot.ticketType);
     
-    const transaction = {
+    setHistory([{
       ...slot.vehicle,
       slotNo,
       entryTime: slot.entryTime,
       exitTime: new Date().toISOString(),
       cost: ticketInfo.price
-    };
+    }, ...history].slice(0, 50));
 
-    setHistory([transaction, ...history].slice(0, 50));
     setSlots(slots.map(s => 
       s.slotNo === slotNo 
-        ? { ...s, occupied: false, vehicle: null, entryTime: null, expiryTime: null, ticketType: null }
+        ? { ...s, occupied: false, vehicle: null, entryTime: null, expiryTime: null, ticketType: null, ticketId: null }
         : s
     ));
     setSelectedSlot(null);
-  };
-
-  const sendWhatsApp = (ticket) => {
-    const msg = `Hello ${ticket.name}, your parking ticket for ${ticket.vehicle} is confirmed! Slot: #${ticket.slotNo}, Expiry: ${new Date(ticket.expiryTime).toLocaleTimeString()}. Transaction ID: ${ticket.ticketId}`;
-    window.open(`https://wa.me/${ticket.whatsapp}?text=${encodeURIComponent(msg)}`, '_blank');
+    setVerificationResult(null);
   };
 
   return (
-    <div className="app-container">
+    <div className={`app-container ${isAttendantMode ? 'attendant-theme' : ''}`}>
+      {/* Mode Switcher */}
+      <div className="mode-toggle glass">
+        <button className={!isAttendantMode ? 'active' : ''} onClick={() => setIsAttendantMode(false)}>
+          <User size={16} /> User Portal
+        </button>
+        <button className={isAttendantMode ? 'active' : ''} onClick={() => setIsAttendantMode(true)}>
+          <ShieldCheck size={16} /> Attendant Portal
+        </button>
+      </div>
+
       {/* Header */}
       <header className="header">
         <div>
-          <h1 className="gradient-text" style={{ fontSize: '2.5rem', fontWeight: 800 }}>ABPS Pro</h1>
-          <p style={{ color: 'var(--text-dim)' }}>Smart Multi-Block Parking System</p>
+          <h1 className="gradient-text">{isAttendantMode ? 'ABPS Admin' : 'ABPS Pro'}</h1>
+          <p style={{ color: 'var(--text-dim)' }}>{isAttendantMode ? 'Verify & Manage Parking' : 'Smart Digital Parking'}</p>
         </div>
         
         <div className="search-bar">
           <Search size={18} />
           <input 
-            placeholder="Search slot, vehicle or owner..." 
+            placeholder={isAttendantMode ? "Verify by Phone or Ticket ID..." : "Search slot or vehicle..."}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
 
-        <button className="btn-primary" onClick={() => { setPaymentSuccess(false); setActiveTicket(null); setShowModal(true); }} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <Plus size={20} /> Book Slot
-        </button>
+        {isAttendantMode ? (
+          <button className="btn-primary" onClick={() => setShowScanner(true)}>
+            <QrCode size={20} /> Scan Ticket
+          </button>
+        ) : (
+          <button className="btn-primary" onClick={() => { setPaymentSuccess(false); setActiveTicket(null); setShowModal(true); }}>
+            <Plus size={20} /> Book Now
+          </button>
+        )}
       </header>
 
-      {/* Stats */}
+      {/* Stats Dashboard */}
       <section className="stats-grid">
-        <StatCard icon={<Car color="#3b82f6" />} label="Total Slots" value={stats.total} color="blue" />
+        <StatCard icon={<Car color="#3b82f6" />} label="Total" value={stats.total} color="blue" />
         <StatCard icon={<Activity color="#ef4444" />} label="Occupied" value={stats.occupied} color="red" />
         <StatCard icon={<CheckCircle2 color="#10b981" />} label="Available" value={stats.available} color="green" />
         <StatCard icon={<CircleDollarSign color="#f59e0b" />} label="Revenue" value={`₹${stats.revenue}`} color="orange" />
       </section>
 
-      {/* Grid */}
+      {/* Verification Tool (Attendant Mode) */}
+      {isAttendantMode && searchQuery.length > 5 && (
+        <div className="verification-quick-check glass animate-fade-in">
+          <h3>Verification Results</h3>
+          {filteredSlots.filter(s => s.occupied).map(slot => (
+            <div key={slot.slotNo} className="verify-card" onClick={() => setVerificationResult({...slot, isValid: new Date() < new Date(slot.expiryTime)})}>
+              <div className="flex-between">
+                <span>{slot.vehicle.name} ({slot.vehicle.phone})</span>
+                <Badge isValid={new Date() < new Date(slot.expiryTime)} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Main Grid */}
       <main className="parking-grid">
         <AnimatePresence>
           {filteredSlots.map(slot => (
-            <SlotCard key={slot.slotNo} slot={slot} onClick={() => slot.occupied && setSelectedSlot(slot)} />
+            <SlotCard 
+              key={slot.slotNo} 
+              slot={slot} 
+              isAttendant={isAttendantMode}
+              onClick={() => slot.occupied && (isAttendantMode ? setVerificationResult({...slot, isValid: new Date() < new Date(slot.expiryTime)}) : setSelectedSlot(slot))} 
+            />
           ))}
         </AnimatePresence>
       </main>
 
       {/* History */}
-      <section className="glass" style={{ marginTop: '2rem', padding: '1.5rem' }}>
-        <div className="flex-between" style={{ marginBottom: '1rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+      <section className="glass history-section">
+        <div className="flex-between" style={{ marginBottom: '1.5rem' }}>
+          <div className="flex-center" style={{ gap: '0.75rem' }}>
             <Activity size={20} color="var(--primary)" />
-            <h2 style={{ fontSize: '1.2rem' }}>Recent Activity</h2>
+            <h2 style={{ fontSize: '1.2rem' }}>{isAttendantMode ? 'Recent Logs' : 'My Activity'}</h2>
           </div>
         </div>
         <div className="history-list">
-          {history.length === 0 ? <p className="empty-text">No recent transactions</p> : 
+          {history.length === 0 ? <p className="empty-text">No records found</p> : 
             history.map((tx, i) => <HistoryItem key={i} tx={tx} />)}
         </div>
       </section>
 
-      {/* Booking Modal & Payment Flow */}
+      {/* Scanner Modal */}
       <AnimatePresence>
-        {showModal && (
+        {showScanner && (
           <div className="modal-overlay">
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="modal-content glass">
-              
-              {!paymentSuccess ? (
-                <>
-                  <div className="header">
-                    <h2>Smart Reservation</h2>
-                    <button onClick={() => setShowModal(false)}><X size={20} /></button>
-                  </div>
+            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="modal-content glass">
+              <div className="header">
+                <h2>Scan Ticket QR</h2>
+                <button onClick={() => setShowScanner(false)}><X size={20} /></button>
+              </div>
+              <QRScanner onScanSuccess={(id) => verifyTicket(id)} onScanError={(err) => console.log(err)} />
+              <p style={{ textAlign: 'center', color: 'var(--text-dim)', marginTop: '1rem' }}>Position the QR code within the frame</p>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
-                  <div className="form-grid">
-                    <div className="form-group">
-                      <label>Owner Name</label>
-                      <input value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="Full Name" />
-                    </div>
-                    <div className="form-group">
-                      <label>Vehicle Number</label>
-                      <input value={form.vehicle} onChange={e => setForm({...form, vehicle: e.target.value})} placeholder="KA 01 AB 1234" />
-                    </div>
-                    <div className="form-group">
-                      <label><Mail size={14} style={{ marginRight: 4 }} /> Email Address</label>
-                      <input value={form.email} onChange={e => setForm({...form, email: e.target.value})} placeholder="email@example.com" />
-                    </div>
-                    <div className="form-group">
-                      <label><MessageCircle size={14} style={{ marginRight: 4 }} /> WhatsApp Number</label>
-                      <input value={form.whatsapp} onChange={e => setForm({...form, whatsapp: e.target.value})} placeholder="91XXXXXXXXXX" />
-                    </div>
-                  </div>
-
-                  <div className="duration-selector">
-                    <label>Select Duration</label>
-                    <div className="ticket-options">
-                      {TICKET_TYPES.map(type => (
-                        <div 
-                          key={type.id} 
-                          className={`ticket-option glass ${form.duration === type.id ? 'active' : ''}`}
-                          onClick={() => setForm({...form, duration: type.id})}
-                        >
-                          <span>{type.label}</span>
-                          <strong>₹{type.price}</strong>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <button className="btn-primary" disabled={isProcessing} onClick={handlePayment} style={{ height: 50 }}>
-                    {isProcessing ? <div className="loader"></div> : <><CreditCard size={18} style={{ marginRight: 8 }} /> Pay & Reserve Now</>}
-                  </button>
-                </>
+      {/* Verification Result Modal */}
+      <AnimatePresence>
+        {verificationResult && (
+          <div className="modal-overlay" onClick={() => setVerificationResult(null)}>
+            <motion.div onClick={e => e.stopPropagation()} initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 50 }} className="modal-content glass verification-modal">
+              {verificationResult.error ? (
+                <div className="error-view">
+                  <AlertTriangle size={64} color="var(--danger)" />
+                  <h2>Invalid Ticket</h2>
+                  <p>{verificationResult.error}</p>
+                  <button className="btn-secondary" onClick={() => setVerificationResult(null)}>Close</button>
+                </div>
               ) : (
-                <TicketView ticket={activeTicket} onClose={() => setShowModal(false)} onWhatsApp={() => sendWhatsApp(activeTicket)} />
+                <div className="proof-view">
+                  <div className={`status-banner ${verificationResult.isValid ? 'valid' : 'expired'}`}>
+                    {verificationResult.isValid ? <ShieldCheck size={32} /> : <AlertTriangle size={32} />}
+                    <span>{verificationResult.isValid ? 'VALID TICKET' : 'EXPIRED'}</span>
+                  </div>
+
+                  <div className="proof-details">
+                    <DetailItem label="Owner" value={verificationResult.vehicle.name} />
+                    <DetailItem label="Phone" value={verificationResult.vehicle.phone} />
+                    <DetailItem label="Vehicle" value={verificationResult.vehicle.vehicle} />
+                    <DetailItem label="Ticket ID" value={verificationResult.ticketId} />
+                    <DetailItem label="Slot" value={`#${verificationResult.slotNo}`} />
+                    <DetailItem label="Expires At" value={new Date(verificationResult.expiryTime).toLocaleTimeString()} />
+                  </div>
+
+                  <div className="timer-section">
+                    <p>Time Remaining</p>
+                    <Countdown time={verificationResult.expiryTime} />
+                  </div>
+
+                  <div className="action-row">
+                    <button className="btn-exit" onClick={() => handleExit(verificationResult.slotNo)}>
+                      <LogOut size={18} /> Release Slot
+                    </button>
+                    <button className="btn-secondary" onClick={() => setVerificationResult(null)}>Cancel</button>
+                  </div>
+                </div>
               )}
             </motion.div>
           </div>
         )}
       </AnimatePresence>
 
-      {/* Slot Details Modal */}
+      {/* Booking Modal (User View) */}
       <AnimatePresence>
-        {selectedSlot && (
-          <div className="modal-overlay" onClick={() => setSelectedSlot(null)}>
-            <motion.div onClick={e => e.stopPropagation()} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="modal-content glass details-modal">
-              <div className="header">
-                <h2>Slot #{selectedSlot.slotNo} Details</h2>
-                <button onClick={() => setSelectedSlot(null)}><X size={20} /></button>
-              </div>
-
-              <div className="details-grid">
-                <DetailItem label="Owner" value={selectedSlot.vehicle.name} />
-                <DetailItem label="Vehicle" value={selectedSlot.vehicle.vehicle} />
-                <DetailItem label="Check-in" value={new Date(selectedSlot.entryTime).toLocaleTimeString()} />
-                <DetailItem label="Expires In" value={<Countdown time={selectedSlot.expiryTime} />} />
-              </div>
-
-              <div className="ticket-badge glass">
-                <QrCode size={40} />
-                <div>
-                  <p style={{ fontSize: '0.8rem', opacity: 0.6 }}>Ticket ID</p>
-                  <p style={{ fontWeight: 700 }}>#{Math.random().toString(36).substr(2, 6).toUpperCase()}</p>
-                </div>
-              </div>
-
-              <button className="btn-exit" onClick={() => handleExit(selectedSlot.slotNo)}>
-                <LogOut size={18} /> Checkout & Exit
-              </button>
+        {showModal && (
+          <div className="modal-overlay">
+            <motion.div className="modal-content glass">
+              {!paymentSuccess ? (
+                <BookingForm isProcessing={isProcessing} form={form} setForm={setForm} onPay={handlePayment} onClose={() => setShowModal(false)} />
+              ) : (
+                <TicketView ticket={activeTicket} onClose={() => setShowModal(false)} />
+              )}
             </motion.div>
           </div>
         )}
@@ -310,22 +346,18 @@ export default function App() {
   );
 }
 
-// Helper Components
-function SlotCard({ slot, onClick }) {
+// Sub-components
+function SlotCard({ slot, isAttendant, onClick }) {
+  const isValid = new Date() < new Date(slot.expiryTime);
   return (
-    <motion.div
-      layout
-      whileHover={{ y: -5 }}
-      className={`slot glass ${slot.occupied ? 'occupied' : 'empty'}`}
-      onClick={onClick}
-    >
+    <motion.div layout whileHover={{ scale: 1.05 }} className={`slot glass ${slot.occupied ? (isValid ? 'occupied' : 'expired') : 'empty'}`} onClick={onClick}>
       <span className="slot-number">#{slot.slotNo}</span>
       <div className="slot-icon">
-        {slot.occupied ? <Car size={24} color="var(--danger)" /> : <div className="slot-dot" />}
+        {slot.occupied ? <Car size={24} color={isValid ? "var(--danger)" : "var(--warning)"} /> : <div className="slot-dot" />}
       </div>
       {slot.occupied && (
         <div className="slot-mini-info">
-          <span>{slot.vehicle.vehicle}</span>
+          <span style={{ fontSize: '0.7rem' }}>{slot.vehicle.vehicle}</span>
           <Countdown time={slot.expiryTime} mini />
         </div>
       )}
@@ -333,67 +365,77 @@ function SlotCard({ slot, onClick }) {
   );
 }
 
-function TicketView({ ticket, onClose, onWhatsApp }) {
+function Badge({ isValid }) {
+  return (
+    <span className={`badge ${isValid ? 'valid' : 'expired'}`}>
+      {isValid ? 'VALID' : 'EXPIRED'}
+    </span>
+  );
+}
+
+function BookingForm({ isProcessing, form, setForm, onPay, onClose }) {
+  return (
+    <>
+      <div className="header">
+        <h2>Reserve Parking</h2>
+        <button onClick={onClose}><X size={20} /></button>
+      </div>
+      <div className="form-grid">
+        <FormInput label="Name" value={form.name} onChange={v => setForm({...form, name: v})} placeholder="Full Name" />
+        <FormInput label="Phone" value={form.phone} onChange={v => setForm({...form, phone: v})} placeholder="91XXXXXXXX" />
+        <FormInput label="Vehicle" value={form.vehicle} onChange={v => setForm({...form, vehicle: v})} placeholder="KA 01 AB 1234" />
+        <div className="form-group">
+          <label>Plan</label>
+          <select className="glass-select" value={form.duration} onChange={e => setForm({...form, duration: e.target.value})}>
+            {TICKET_TYPES.map(t => <option key={t.id} value={t.id}>{t.label} - ₹{t.price}</option>)}
+          </select>
+        </div>
+      </div>
+      <button className="btn-primary" disabled={isProcessing} onClick={onPay}>
+        {isProcessing ? <div className="loader"></div> : <><CreditCard size={18} /> Pay & Park</>}
+      </button>
+    </>
+  );
+}
+
+function FormInput({ label, value, onChange, placeholder }) {
+  return (
+    <div className="form-group">
+      <label>{label}</label>
+      <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} />
+    </div>
+  );
+}
+
+function TicketView({ ticket, onClose }) {
   return (
     <div className="ticket-view">
-      <div className="success-header">
-        <CheckCircle2 size={48} color="var(--success)" />
-        <h2>Payment Successful!</h2>
-        <p>Slot #{ticket.slotNo} Reserved Successfully</p>
-      </div>
-
+      <CheckCircle2 size={48} color="var(--success)" />
+      <h2>Confirmed! Slot #{ticket.slotNo}</h2>
       <div className="ticket-card glass glow-blue">
-        <div className="ticket-top">
-          <div>
-            <h3>{ticket.name}</h3>
-            <p>{ticket.vehicle}</p>
-          </div>
-          <div className="qr-container">
-            <QRCodeSVG value={ticket.ticketId} size={80} bgColor="transparent" fgColor="white" />
-          </div>
+        <div className="flex-between">
+          <div><p className="t-label">Vehicle</p><p className="t-value">{ticket.vehicle}</p></div>
+          <QRCodeSVG value={ticket.ticketId} size={60} bgColor="transparent" fgColor="white" />
         </div>
-        <div className="ticket-divider"></div>
-        <div className="ticket-bottom">
-          <div className="info">
-            <span>Duration</span>
-            <p>{ticket.duration}</p>
-          </div>
-          <div className="info">
-            <span>Expiry</span>
-            <p>{new Date(ticket.expiryTime).toLocaleTimeString()}</p>
-          </div>
-          <div className="info">
-            <span>Price</span>
-            <p>₹{ticket.price}</p>
-          </div>
+        <div className="t-divider"></div>
+        <div className="grid-3">
+          <div><p className="t-label">Plan</p><p>{ticket.duration}</p></div>
+          <div><p className="t-label">Expires</p><p>{new Date(ticket.expiryTime).toLocaleTimeString()}</p></div>
+          <div><p className="t-label">ID</p><p>{ticket.ticketId}</p></div>
         </div>
       </div>
-
-      <div className="notification-status">
-        <p><Mail size={12} /> Confirmation sent to {ticket.email}</p>
-      </div>
-
-      <div className="ticket-actions">
-        <button className="btn-whatsapp" onClick={onWhatsApp}><MessageCircle size={18} /> Send on WhatsApp</button>
-        <button className="btn-secondary" onClick={onClose}><X size={18} /> Close</button>
-      </div>
+      <button className="btn-primary" onClick={onClose}>Finish</button>
     </div>
   );
 }
 
 function Countdown({ time, mini }) {
   const [timeLeft, setTimeLeft] = useState("");
-
   useEffect(() => {
     const timer = setInterval(() => {
-      const now = new Date();
-      const end = new Date(time);
-      const diff = end - now;
-
-      if (diff <= 0) {
-        setTimeLeft("Expired");
-        clearInterval(timer);
-      } else {
+      const diff = new Date(time) - new Date();
+      if (diff <= 0) { setTimeLeft("Expired"); clearInterval(timer); }
+      else {
         const h = Math.floor(diff / 3600000);
         const m = Math.floor((diff % 3600000) / 60000);
         const s = Math.floor((diff % 60000) / 1000);
@@ -402,18 +444,14 @@ function Countdown({ time, mini }) {
     }, 1000);
     return () => clearInterval(timer);
   }, [time, mini]);
-
-  return <span style={{ color: timeLeft === "Expired" ? 'var(--danger)' : 'var(--success)', fontWeight: 700 }}>{timeLeft}</span>;
+  return <span className={`countdown ${timeLeft === "Expired" ? 'red' : 'green'}`}>{timeLeft}</span>;
 }
 
 function StatCard({ icon, label, value, color }) {
   return (
     <div className={`stat-card glass glow-${color}`}>
       <div className="stat-icon" style={{ background: `var(--${color}-glow)` }}>{icon}</div>
-      <div>
-        <p className="stat-label">{label}</p>
-        <p className="stat-value">{value}</p>
-      </div>
+      <div><p className="stat-label">{label}</p><p className="stat-value">{value}</p></div>
     </div>
   );
 }
@@ -421,16 +459,13 @@ function StatCard({ icon, label, value, color }) {
 function HistoryItem({ tx }) {
   return (
     <div className="history-item glass">
-      <div className="history-left">
-        <div className="history-icon"><Car size={18} color="var(--primary)" /></div>
-        <div>
-          <p className="history-vehicle">{tx.vehicle}</p>
-          <p className="history-details">Slot #{tx.slotNo} • {tx.name}</p>
-        </div>
+      <div className="flex-center" style={{ gap: '1rem' }}>
+        <div className="h-icon"><Car size={18} /></div>
+        <div><p className="h-title">{tx.vehicle}</p><p className="h-sub">Slot #{tx.slotNo} • {tx.name}</p></div>
       </div>
-      <div className="history-right">
-        <p className="history-cost">+ ₹{tx.cost}</p>
-        <p className="history-time">{new Date(tx.exitTime).toLocaleTimeString()}</p>
+      <div style={{ textAlign: 'right' }}>
+        <p className="h-cost">₹{tx.cost}</p>
+        <p className="h-time">{new Date(tx.exitTime).toLocaleTimeString()}</p>
       </div>
     </div>
   );
@@ -439,8 +474,8 @@ function HistoryItem({ tx }) {
 function DetailItem({ label, value }) {
   return (
     <div className="detail-item">
-      <p className="detail-label">{label}</p>
-      <p className="detail-value">{value}</p>
+      <p className="d-label">{label}</p>
+      <p className="d-value">{value}</p>
     </div>
   );
 }
