@@ -182,6 +182,42 @@ export default function App() {
         </AnimatePresence>
       </main>
 
+      {/* Transaction History */}
+      <section className="glass" style={{ marginTop: '2rem', padding: '1.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+          <Activity size={20} color="var(--primary)" />
+          <h2 style={{ fontSize: '1.2rem' }}>Recent Transactions</h2>
+        </div>
+        
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          {history.length === 0 ? (
+            <p style={{ color: 'var(--text-dim)', textAlign: 'center', padding: '2rem' }}>No recent transactions</p>
+          ) : (
+            history.map((tx, i) => (
+              <div key={i} className="glass" style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.02)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <div style={{ padding: '8px', borderRadius: '8px', background: 'rgba(59, 130, 246, 0.1)' }}>
+                    <Car size={18} color="var(--primary)" />
+                  </div>
+                  <div>
+                    <p style={{ fontWeight: 600 }}>{tx.vehicle}</p>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>Slot #{tx.slotNo} • {tx.name}</p>
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <p style={{ fontWeight: 700, color: tx.cost > 0 ? 'var(--success)' : 'var(--text-dim)' }}>
+                    {tx.cost > 0 ? `+ ₹${tx.cost}` : 'PREPAID'}
+                  </p>
+                  <p style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>
+                    {new Date(tx.exitTime).toLocaleTimeString()}
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
+
       {/* Booking Modal */}
       <AnimatePresence>
         {showModal && (
