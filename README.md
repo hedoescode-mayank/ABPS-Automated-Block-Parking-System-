@@ -1,16 +1,48 @@
-# React + Vite
+# ABPS Pro - Automated Block Parking System
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+ABPS Pro is a premium, real-time parking management dashboard built with React and Vite. It features a modern glassmorphism UI, advanced vehicle tracking, and automated revenue calculation.
 
-Currently, two official plugins are available:
+![ABPS Preview](https://via.placeholder.com/1200x600?text=ABPS+Pro+Dashboard+Preview)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## 🚀 Features
 
-## React Compiler
+- **Premium UI/UX**: Dark mode glassmorphism theme with neon accents and smooth Framer Motion animations.
+- **Real-time Monitoring**: Visual grid representing 60 parking slots with instant status updates.
+- **Advanced Search**: Quickly find vehicles by plate number, owner name, or slot ID.
+- **Revenue Management**: Automated cost calculation based on hourly rates (₹50/hr).
+- **Persistence**: LocalStorage integration ensures data is saved across browser refreshes.
+- **Interactive Modals**: Detailed vehicle information and easy check-in/check-out workflow.
+- **Mobile Responsive**: Fully optimized for tablets and mobile devices.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## 🛠️ Tech Stack
 
-## Expanding the ESLint configuration
+- **Core**: React 19, Vite
+- **Styling**: Vanilla CSS (Custom Design System)
+- **Icons**: Lucide React
+- **Animations**: Framer Motion
+- **Utilities**: clsx, tailwind-merge
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## 📦 Installation
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/hedoescode-mayank/ABPS-Automated-Block-Parking-System-.git
+   ```
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Start the development server:
+   ```bash
+   npm run dev
+   ```
+
+## 📈 Dashboard Statistics
+
+- **Total Slots**: 60
+- **Occupied/Available**: Real-time counters
+- **Total Revenue**: Cumulative earnings from completed transactions
+
+## 📄 License
+
+MIT License - feel free to use and modify for your own projects.
